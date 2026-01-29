@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import API from "../services/api";
-import { updateProfile as updateFirebaseProfile, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "../firebase";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function Settings() {
 
@@ -20,6 +21,22 @@ export default function Settings() {
 
   const [partners, setPartners] = useState([]);
   const [newPartner, setNewPartner] = useState({ name: "", type: "" });
+
+  // Feedback States
+  const [partnerFeedback, setPartnerFeedback] = useState({ message: "", type: "" });
+  const [categoryFeedback, setCategoryFeedback] = useState({ message: "", type: "" });
+  const [rewardFeedback, setRewardFeedback] = useState({ message: "", type: "" });
+  const [profileFeedback, setProfileFeedback] = useState({ message: "", type: "" });
+  const [passwordFeedback, setPasswordFeedback] = useState({ message: "", type: "" });
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    isDangerous: false,
+    confirmText: "Confirm"
+  });
 
   useEffect(() => {
     loadSettings();
@@ -45,48 +62,71 @@ export default function Settings() {
   // PARTNERS
   const addPartner = async () => {
     if (!newPartner.name || !newPartner.type) return;
+    setPartnerFeedback({ message: "", type: "" });
     try {
       const res = await API.post("/admin/settings/partners", newPartner);
       setPartners(res.data.partners);
       setNewPartner({ name: "", type: "" });
+      setPartnerFeedback({ message: "Partner added successfully", type: "success" });
     } catch {
-      alert("Failed to add partner");
+      setPartnerFeedback({ message: "Failed to add partner", type: "error" });
     }
   };
 
   const removePartner = async (id) => {
-    if (!window.confirm("Remove this partner?")) return;
-    try {
-      const res = await API.delete(`/admin/settings/partners/${id}`);
-      setPartners(res.data.partners);
-    } catch {
-      alert("Failed to remove partner");
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Remove Partner?",
+      message: "This partner will be removed from the list.",
+      confirmText: "Remove",
+      isDangerous: true,
+      onConfirm: async () => {
+        setPartnerFeedback({ message: "", type: "" });
+        try {
+          const res = await API.delete(`/admin/settings/partners/${id}`);
+          setPartners(res.data.partners);
+          setPartnerFeedback({ message: "Partner removed successfully", type: "success" });
+        } catch {
+          setPartnerFeedback({ message: "Failed to remove partner", type: "error" });
+        }
+      }
+    });
   };
 
   // CATEGORY
   const addCategory = async () => {
     if (!newCategory) return;
+    setCategoryFeedback({ message: "", type: "" });
     try {
       await API.post("/admin/settings/categories", { name: newCategory });
       setNewCategory("");
       loadSettings();
+      setCategoryFeedback({ message: "Category added", type: "success" });
     } catch {
-      alert("Failed to add category");
+      setCategoryFeedback({ message: "Failed to add category", type: "error" });
     }
   };
 
   const removeCategory = async (name) => {
-    if (!window.confirm(`Delete category "${name}"?`)) return;
-    try {
-      await API.delete(`/admin/settings/categories/${name}`);
-      loadSettings();
-    } catch {
-      alert("Failed to delete");
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Category?",
+      message: `Are you sure you want to delete "${name}"?`,
+      confirmText: "Delete",
+      isDangerous: true,
+      onConfirm: async () => {
+        setCategoryFeedback({ message: "", type: "" });
+        try {
+          await API.delete(`/admin/settings/categories/${name}`);
+          loadSettings();
+          setCategoryFeedback({ message: "Category deleted", type: "success" });
+        } catch {
+          setCategoryFeedback({ message: "Failed to delete category", type: "error" });
+        }
+      }
+    });
   };
 
-  // REWARD
   // REWARD
   // Debounce Ref to prevent excessive API calls
   const debounceRef = useRef(null);
@@ -102,8 +142,10 @@ export default function Settings() {
       try {
         await API.put("/admin/settings/rewards", { type, val });
         // No need to reloadSettings() here as we already have the value
+        setRewardFeedback({ message: "Rewards updated", type: "success" });
+        setTimeout(() => setRewardFeedback({ message: "", type: "" }), 2000);
       } catch {
-        alert("Failed to update reward");
+        setRewardFeedback({ message: "Failed to update reward", type: "error" });
         loadSettings(); // Revert on failure
       }
     }, 500); // 500ms delay
@@ -133,27 +175,32 @@ export default function Settings() {
         await auth.currentUser.reload();
       }
 
-      alert("Profile updated successfully");
+      setProfileFeedback({ message: "Profile updated successfully", type: "success" });
       loadSettings(); // Reload to get confirmed changes
-      window.location.reload(); // Force reload to update Sidebar immediately
+      // window.location.reload(); // Removed force reload to show success message
+
+      // Update sidebar locally if context exists, otherwise a simple reload might be needed eventually, 
+      // but let's prioritize the feedback message first.
+      setTimeout(() => window.location.reload(), 1000);
 
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || "Failed to update profile");
+      setProfileFeedback({ message: err.response?.data?.message || "Failed to update profile", type: "error" });
     }
   };
 
   const updatePassword = async () => {
+    setPasswordFeedback({ message: "", type: "" });
     if (!passwords.new) {
-      alert("Please enter a new password.");
+      setPasswordFeedback({ message: "Please enter a new password.", type: "warning" });
       return;
     }
     if (passwords.new !== passwords.confirm) {
-      alert("New passwords do not match!");
+      setPasswordFeedback({ message: "New passwords do not match!", type: "error" });
       return;
     }
     if (!passwords.old) {
-      alert("Please enter your current password to change it.");
+      setPasswordFeedback({ message: "Please enter your current password to change it.", type: "warning" });
       return;
     }
 
@@ -163,7 +210,7 @@ export default function Settings() {
       await reauthenticateWithCredential(auth.currentUser, credential);
     } catch (err) {
       console.error("Re-auth failed", err);
-      alert("Incorrect Current Password");
+      setPasswordFeedback({ message: "Incorrect Current Password", type: "error" });
       return;
     }
 
@@ -174,7 +221,7 @@ export default function Settings() {
 
       await API.put("/admin/settings/profile", formData);
 
-      alert("Password updated successfully");
+      setPasswordFeedback({ message: "Password updated successfully", type: "success" });
       setPasswords({ old: "", new: "", confirm: "", showOld: false, showNew: false, showConfirm: false });
 
       // SYNC WITH FIREBASE AUTH
@@ -184,13 +231,12 @@ export default function Settings() {
           loadSettings();
         } catch (reloadErr) {
           console.warn("User reload failed after password change (expected due to token invalidation):", reloadErr);
-          // Optional: Force logout if needed, but for now just letting them stay or re-login naturally
         }
       }
 
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || "Failed to update password");
+      setPasswordFeedback({ message: err.response?.data?.message || "Failed to update password", type: "error" });
     }
   };
 
@@ -205,16 +251,13 @@ export default function Settings() {
         </div>
       </div>
 
-
-
-
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {/* ADMIN PROFILE CARD */}
         <div className="glass-card rounded-3xl p-8 border border-white/5 shadow-2xl relative overflow-hidden">
 
           <h3 className="card-title text-2xl text-white mb-6">Administrator Profile</h3>
+          {profileFeedback.message && <div className={`alert ${profileFeedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{profileFeedback.message}</span></div>}
           <div className="flex flex-col gap-8 relative z-10 items-center">
 
             {/* PROFILE IMAGE */}
@@ -258,6 +301,7 @@ export default function Settings() {
         {/* SECURITY / PASSWORD CARD */}
         <div className="glass-card rounded-3xl p-8 border border-white/5 shadow-2xl relative overflow-hidden flex flex-col">
           <h3 className="card-title text-2xl text-white mb-6">Security</h3>
+          {passwordFeedback.message && <div className={`alert ${passwordFeedback.type === 'success' ? 'alert-success' : passwordFeedback.type === 'warning' ? 'alert-warning' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl text-white border-0`}><span>{passwordFeedback.message}</span></div>}
           <div className="space-y-4 max-w-2xl mx-auto">
             {/* CURRENT PASSWORD */}
             <div className="form-control relative">
@@ -344,6 +388,7 @@ export default function Settings() {
             Waste Categories
           </h3>
           <p className="text-gray-400 text-sm mb-6">Manage the types of waste accepted by the system.</p>
+          {categoryFeedback.message && <div className={`alert ${categoryFeedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{categoryFeedback.message}</span></div>}
 
           <div className="flex gap-2 mb-6">
             <input
@@ -378,6 +423,7 @@ export default function Settings() {
             Reward Values
           </h3>
           <p className="text-gray-400 text-sm mb-6">Set base point values per kg/unit for each waste type.</p>
+          {rewardFeedback.message && <div className={`alert ${rewardFeedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{rewardFeedback.message}</span></div>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
             {Object.keys(rewards).map(k => (
@@ -433,6 +479,7 @@ export default function Settings() {
             {/* ADD NEW PARTNER - RECTANGLE STYLE */}
             <div className="lg:col-span-1 bg-[#0F111A] p-6 rounded-2xl border border-white/5 h-full">
               <h4 className="text-white font-bold mb-6 text-lg">Add New Partner</h4>
+              {partnerFeedback.message && <div className={`alert ${partnerFeedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{partnerFeedback.message}</span></div>}
               <div className="space-y-6">
                 <div className="form-control">
                   <label className="label uppercase text-xs font-bold text-gray-500 tracking-wider mb-1">Company Name</label>
@@ -509,7 +556,16 @@ export default function Settings() {
           </div>
         </div>
 
-      </div>
-    </div>
+      </div >
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
+    </div >
   );
 }

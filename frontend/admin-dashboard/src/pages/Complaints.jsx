@@ -6,6 +6,7 @@ import TablePagination from "../components/TablePagination"; // Import
 export default function Complaints() {
   const [complaints, setComplaints] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
+  const [feedback, setFeedback] = useState({ message: "", type: "" });
 
   // 📄 PAGINATION
   const [page, setPage] = useState(0);
@@ -20,7 +21,7 @@ export default function Complaints() {
       const res = await API.get("/admin/complaints");
       setComplaints(res.data.data || []);
     } catch {
-      alert("Failed to load complaints");
+      setFeedback({ message: "Failed to load complaints", type: "error" });
     }
   };
 
@@ -36,8 +37,10 @@ export default function Complaints() {
         adminNote: "Thank you for contacting. We will soon solve the issue, thank you."
       });
       loadComplaints();
+      setFeedback({ message: "Reply sent successfully", type: "success" });
+      setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
     } catch {
-      alert("Failed to send reply");
+      setFeedback({ message: "Failed to send reply", type: "error" });
     }
   };
 
@@ -49,8 +52,10 @@ export default function Complaints() {
       });
       loadComplaints();
       window.dispatchEvent(new Event("refreshSidebar"));
+      setFeedback({ message: "Complaint resolved", type: "success" });
+      setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
     } catch {
-      alert("Failed to update complaint");
+      setFeedback({ message: "Failed to update complaint", type: "error" });
     }
   };
 
@@ -74,6 +79,9 @@ export default function Complaints() {
           </div>
         </div>
       </div>
+
+
+      {feedback.message && <div className={`alert ${feedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{feedback.message}</span></div>}
 
       {/* TABLE */}
       <div className="glass-card rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
@@ -216,6 +224,6 @@ export default function Complaints() {
           )}
         </div>
       </dialog>
-    </div>
+    </div >
   );
 }

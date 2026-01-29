@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import API from "../services/api";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function ManageAdmins() {
   const [formData, setFormData] = useState({
@@ -11,6 +12,10 @@ export default function ManageAdmins() {
   const [admins, setAdmins] = useState([]);
   const [fetching, setFetching] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null });
+
+  const [createFeedback, setCreateFeedback] = useState({ message: "", type: "" });
+  const [listFeedback, setListFeedback] = useState({ message: "", type: "" });
 
   // Fetch Admins
   const fetchAdmins = async () => {
@@ -34,26 +39,54 @@ export default function ManageAdmins() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setCreateFeedback({ message: "", type: "" });
     try {
       await API.post("/admin/create", formData);
-      alert("Admin account created successfully!");
+      setCreateFeedback({ message: "Admin account created successfully!", type: "success" });
       setFormData({ name: "", email: "", password: "" });
       fetchAdmins(); // Refresh list
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to create admin");
+      setCreateFeedback({ message: err.response?.data?.message || "Failed to create admin", type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDelete = async (id) => {
+    setConfirmModal({ isOpen: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmModal.id) return;
+    try {
+      const res = await API.delete(`/admin/delete/${confirmModal.id}`);
+      if (res.data.success) {
+        setListFeedback({ message: "Admin deleted successfully", type: "success" });
+        fetchAdmins();
+      }
+    } catch (err) {
+      console.error(err);
+      setListFeedback({ message: err.response?.data?.message || "Failed to delete admin", type: "error" });
+    }
+  };
+
   return (
     <div className="p-2 lg:p-8 animate-fade-in min-h-full">
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title="Delete Admin?"
+        message="Are you sure you want to delete this administrator? This action cannot be undone."
+        confirmText="Delete Admin"
+        isDangerous={true}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmDelete}
+      />
       <div className="max-w-7xl mx-auto space-y-8">
 
         {/* HEADER */}
         <div>
           <h2 className="text-4xl font-black text-white tracking-tight">Manage <span className="text-gradient">Admins</span></h2>
-          
+
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -148,6 +181,7 @@ export default function ManageAdmins() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               </button>
             </div>
+            {listFeedback.message && <div className={`alert ${listFeedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{listFeedback.message}</span></div>}
 
             {fetching ? (
               <div className="flex justify-center py-10">
@@ -182,8 +216,17 @@ export default function ManageAdmins() {
                       </div>
 
                       {/* BADGE */}
-                      <div className="badge badge-success badge-outline gap-1 text-xs font-bold">
-                        Admin
+                      <div className="flex items-center gap-2">
+                        <div className="badge badge-success badge-outline gap-1 text-xs font-bold">
+                          Admin
+                        </div>
+                        <button
+                          onClick={() => handleDelete(admin.uid)}
+                          className="btn btn-ghost btn-circle btn-xs text-error hover:bg-error/10"
+                          title="Delete Admin"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
                       </div>
 
                     </div>

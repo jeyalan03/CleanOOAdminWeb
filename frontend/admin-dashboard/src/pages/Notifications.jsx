@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
@@ -8,6 +8,7 @@ export default function Notifications() {
   const [message, setMessage] = useState("");
   const [target, setTarget] = useState("all");
   const [targetValue, setTargetValue] = useState("");
+  const [feedback, setFeedback] = useState({ message: "", type: "" });
 
   const [zones, setZones] = useState([]);
   const [households, setHouseholds] = useState([]);
@@ -16,12 +17,9 @@ export default function Notifications() {
   const [activeTab, setActiveTab] = useState("inbox"); // 'inbox' | 'broadcast'
   const [alerts, setAlerts] = useState([]);
 
-  useEffect(() => {
-    loadHistory();
-    loadLists();
-  }, []);
 
-  const loadHistory = async () => {
+
+  const loadHistory = useCallback(async () => {
     try {
       const res = await API.get("/admin/notifications");
       const all = res.data.data || [];
@@ -30,9 +28,9 @@ export default function Notifications() {
     } catch {
       // Silent fail
     }
-  };
+  }, []);
 
-  const loadLists = async () => {
+  const loadLists = useCallback(async () => {
     try {
       const [h, c] = await Promise.all([
         API.get("/admin/households"),
@@ -45,15 +43,20 @@ export default function Notifications() {
       setZones(z);
 
     } catch {
-      alert("Failed to load lists");
+      setFeedback({ message: "Failed to load lists", type: "error" });
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+    loadLists();
+  }, [loadHistory, loadLists]);
 
   const sendNotification = async (e) => {
     e.preventDefault();
 
     if (!title || !message) {
-      alert("Title & message required");
+      setFeedback({ message: "Title & message required", type: "warning" });
       return;
     }
 
@@ -64,14 +67,15 @@ export default function Notifications() {
         target,
         targetValue
       });
-      alert("Notification sent");
+      setFeedback({ message: "Notification sent", type: "success" });
+      setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
       setTitle("");
       setMessage("");
       setTarget("all");
       setTargetValue("");
       loadHistory();
     } catch {
-      alert("Failed to send");
+      setFeedback({ message: "Failed to send", type: "error" });
     }
   };
 
@@ -81,7 +85,7 @@ export default function Notifications() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 overflow-hidden relative p-1">
         <div className="relative z-10">
-          
+
           <h2 className="text-4xl font-black text-white tracking-tight">Notification <span className="text-gradient">Center</span></h2>
         </div>
 
@@ -100,6 +104,8 @@ export default function Notifications() {
           </button>
         </div>
       </div>
+
+      {feedback.message && <div className={`alert ${feedback.type === 'success' ? 'alert-success' : feedback.type === 'warning' ? 'alert-warning' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{feedback.message}</span></div>}
 
       {activeTab === 'inbox' ? (
         <div className="glass-card rounded-3xl p-8 border border-white/5 shadow-2xl min-h-[50vh]">

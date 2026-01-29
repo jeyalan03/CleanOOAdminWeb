@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import ConfirmModal from "../components/ConfirmModal";
 
 import TablePagination from "../components/TablePagination"; // Import
 
@@ -7,6 +8,7 @@ export default function Households() {
 
   const [households, setHouseholds] = useState([]);
   const [editData, setEditData] = useState(null);
+  const [feedback, setFeedback] = useState({ message: "", type: "" });
 
   const [historyData, setHistoryData] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -19,25 +21,58 @@ export default function Households() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
 
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    isDangerous: false,
+    confirmText: "Confirm"
+  });
+
   useEffect(() => {
     loadHouseholds();
   }, []);
 
   const loadHouseholds = async () => {
-    const res = await API.get("/admin/households");
-    setHouseholds(res.data.data || []);
+    try {
+      const res = await API.get("/admin/households");
+      setHouseholds(res.data.data || []);
+    } catch {
+      setFeedback({ message: "Failed to load households", type: "error" });
+    }
   };
 
   const toggleStatus = async (id, current) => {
-    const status = current === "active" ? "blocked" : "active";
-    await API.put(`/admin/households/${id}`, { status });
-    loadHouseholds();
+    try {
+      const status = current === "active" ? "blocked" : "active";
+      await API.put(`/admin/households/${id}`, { status });
+      loadHouseholds();
+      setFeedback({ message: `User ${status}`, type: "success" });
+      setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+    } catch {
+      setFeedback({ message: "Failed to update status", type: "error" });
+    }
   };
 
   const deleteHousehold = async (id) => {
-    if (!window.confirm("Delete this household?")) return;
-    await API.delete(`/admin/households/${id}`);
-    loadHouseholds();
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Household?",
+      message: "This user will be permanently deleted.",
+      confirmText: "Delete",
+      isDangerous: true,
+      onConfirm: async () => {
+        try {
+          await API.delete(`/admin/households/${id}`);
+          loadHouseholds();
+          setFeedback({ message: "Household deleted", type: "success" });
+          setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+        } catch {
+          setFeedback({ message: "Failed to delete household", type: "error" });
+        }
+      }
+    });
   };
 
   const saveEdit = async () => {
@@ -84,6 +119,8 @@ export default function Households() {
           TOTAL USERS: {households.length}
         </div>
       </div>
+
+      {feedback.message && <div className={`alert ${feedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{feedback.message}</span></div>}
 
       {/* SEARCH & FILTER BAR */}
       <div className="glass p-4 rounded-2xl flex flex-col sm:flex-row gap-4 items-center justify-between relative overflow-visible z-20">
@@ -324,10 +361,10 @@ export default function Households() {
                       <td>
                         {h.points > 0 ? (
                           <div className={`badge badge-sm border-0 font-bold text-[10px] uppercase ${h.isRedeemed ? 'bg-blue-500/10 text-blue-500' :
-                              h.isExpired ? 'bg-red-500/10 text-red-500' :
-                                h.rewardStatus === 'approved' ? 'bg-green-500/10 text-green-500' :
-                                  h.rewardStatus === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
-                                    'bg-gray-500/10 text-gray-500'
+                            h.isExpired ? 'bg-red-500/10 text-red-500' :
+                              h.rewardStatus === 'approved' ? 'bg-green-500/10 text-green-500' :
+                                h.rewardStatus === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
+                                  'bg-gray-500/10 text-gray-500'
                             }`}>
                             {h.isRedeemed ? 'Used' : h.isExpired ? 'Expired' : h.rewardStatus || 'Pending'}
                           </div>
@@ -356,6 +393,15 @@ export default function Households() {
         </form>
       </dialog>
 
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
     </div>
   );
 }

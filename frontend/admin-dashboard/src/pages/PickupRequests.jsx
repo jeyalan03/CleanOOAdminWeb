@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
+import ConfirmModal from "../components/ConfirmModal";
 
 import TablePagination from "../components/TablePagination"; // Import
 
@@ -8,6 +9,7 @@ export default function PickupRequests() {
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [feedback, setFeedback] = useState({ message: "", type: "" });
 
   const [pickups, setPickups] = useState([]);
   const [q, setQ] = useState("");
@@ -25,6 +27,16 @@ export default function PickupRequests() {
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [selectedPickupId, setSelectedPickupId] = useState(null);
 
+  // 🗑️ CONFIRM MODAL STATE
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    isDangerous: false,
+    confirmText: "Confirm"
+  });
+
   const selectedPickup = pickups.find(p => p._id === selectedPickupId);
 
   const initiateCompletion = (id) => {
@@ -34,7 +46,7 @@ export default function PickupRequests() {
 
   const confirmCompletion = async () => {
     // Backend will use existing weight if we don't send one
-    await markStatus(selectedPickupId, "completed");
+    await markStatus(selectedPickupId, "completed", null, true); // true = skip confirm
     setWeightModalOpen(false);
     window.dispatchEvent(new Event("refreshSidebar"));
   };
@@ -50,7 +62,7 @@ export default function PickupRequests() {
       setPickups(res.data.data || []);
       setPage(0); // Reset URL pagination on new fetch
     } catch {
-      alert("Failed to load pickups");
+      setFeedback({ message: "Failed to load pickups", type: "error" });
     }
   };
 
@@ -75,28 +87,52 @@ export default function PickupRequests() {
   };
 
   // UPDATE STATUS
-  const markStatus = async (id, status, weight = null) => {
-    if (!window.confirm(`Change status to ${status}?`)) return;
+  const markStatus = async (id, status, weight = null, skipConfirm = false) => {
+    const executeUpdate = async () => {
+      try {
+        await API.put(`/admin/pickups/status/${id}`, { status, weight });
+        loadPickups({ q, status: statusFilter });
+        window.dispatchEvent(new Event("refreshSidebar"));
+        setFeedback({ message: `Status updated to ${status}`, type: "success" });
+        setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+      } catch {
+        setFeedback({ message: "Status update failed", type: "error" });
+      }
+    };
 
-    try {
-      await API.put(`/admin/pickups/status/${id}`, { status, weight });
-      loadPickups({ q, status: statusFilter });
-      window.dispatchEvent(new Event("refreshSidebar"));
-    } catch {
-      alert("Status update failed");
+    if (skipConfirm) {
+      await executeUpdate();
+      return;
     }
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Update Status?",
+      message: `Are you sure you want to change the status to ${status}?`,
+      confirmText: "Yes, Update",
+      isDangerous: status === 'cancelled',
+      onConfirm: executeUpdate
+    });
   };
 
   // SEND WARNING
   const sendWarning = async (householdId) => {
-    if (!window.confirm("Send warning to this household?")) return;
-
-    try {
-      await API.put(`/admin/pickups/warning/${householdId}`);
-      alert("Warning sent");
-    } catch {
-      alert("Failed to send warning");
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Send Warning?",
+      message: "This will send a formal warning to the household. Continue?",
+      confirmText: "Send Warning",
+      isDangerous: true,
+      onConfirm: async () => {
+        try {
+          await API.put(`/admin/pickups/warning/${householdId}`);
+          setFeedback({ message: "Warning sent successfully", type: "success" });
+          setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+        } catch {
+          setFeedback({ message: "Failed to send warning", type: "error" });
+        }
+      }
+    });
   };
 
   return (
@@ -112,6 +148,9 @@ export default function PickupRequests() {
           TOTAL REQUESTS: {pickups.length}
         </div>
       </div>
+
+      {/* FEEDBACK STATUS */}
+      {feedback.message && <div className={`alert ${feedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{feedback.message}</span></div>}
 
       {/* SEARCH & FILTERS */}
       <div className="glass p-4 rounded-2xl z-20 relative border border-white/5 overflow-x-auto">
@@ -386,6 +425,15 @@ export default function PickupRequests() {
           </div>
         </div>
       </dialog>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
     </div>
   );
 }

@@ -1,15 +1,26 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import ConfirmModal from "../components/ConfirmModal";
 
 import TablePagination from "../components/TablePagination"; // Import
 
 export default function Rewards() {
   const [rewards, setRewards] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState({ message: "", type: "" });
 
   // 📄 PAGINATION
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    isDangerous: false,
+    confirmText: "Confirm"
+  });
 
   useEffect(() => {
     loadRewards();
@@ -40,26 +51,45 @@ export default function Rewards() {
     const expiryDate = new Date(reward.createdAt);
     expiryDate.setMonth(expiryDate.getMonth() + 6);
 
-    if (!window.confirm(`Approve this reward? Points will be credited.\n(Expiry: ${expiryDate.toLocaleDateString()})`)) return;
-
-    try {
-      await API.put(`/admin/rewards/approve/${id}`);
-      loadRewards();
-      window.dispatchEvent(new Event("refreshSidebar")); // 🚀 Update Sidebar Badge
-    } catch (err) {
-      alert("Failed to approve");
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Approve Reward?",
+      message: `Points will be credited. Expiry: ${expiryDate.toLocaleDateString()}`,
+      confirmText: "Approve",
+      isDangerous: false,
+      onConfirm: async () => {
+        try {
+          await API.put(`/admin/rewards/approve/${id}`);
+          window.dispatchEvent(new Event("refreshSidebar")); // 🚀 Update Sidebar Badge
+          loadRewards(); // Refresh list to show status change
+          setFeedback({ message: "Reward approved", type: "success" });
+          setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+        } catch (err) {
+          setFeedback({ message: "Failed to approve", type: "error" });
+        }
+      }
+    });
   };
 
   const reject = async (id) => {
-    if (!window.confirm("Reject this reward request?")) return;
-    try {
-      await API.put(`/admin/rewards/reject/${id}`);
-      loadRewards();
-      window.dispatchEvent(new Event("refreshSidebar")); // 🚀 Update Sidebar Badge
-    } catch (err) {
-      alert("Failed to reject");
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Reject Reward?",
+      message: "This request will be rejected permanently.",
+      confirmText: "Reject",
+      isDangerous: true,
+      onConfirm: async () => {
+        try {
+          await API.put(`/admin/rewards/reject/${id}`);
+          loadRewards();
+          window.dispatchEvent(new Event("refreshSidebar")); // 🚀 Update Sidebar Badge
+          setFeedback({ message: "Reward rejected", type: "success" });
+          setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+        } catch (err) {
+          setFeedback({ message: "Failed to reject", type: "error" });
+        }
+      }
+    });
   };
 
   const totalPointsDistributed = rewards
@@ -88,6 +118,9 @@ export default function Rewards() {
           </div>
         </div>
       </div>
+
+
+      {feedback.message && <div className={`alert ${feedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{feedback.message}</span></div>}
 
       {loading && <div className="text-center py-10"><span className="loading loading-spinner loading-lg text-primary"></span></div>}
 
@@ -216,6 +249,15 @@ export default function Rewards() {
           />
         </div>
       </div>
-    </div>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
+    </div >
   );
 }

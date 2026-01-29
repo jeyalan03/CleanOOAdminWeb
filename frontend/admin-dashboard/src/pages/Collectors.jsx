@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import ConfirmModal from "../components/ConfirmModal";
 
 import TablePagination from "../components/TablePagination"; // Import
 
@@ -7,6 +8,7 @@ export default function Collectors() {
 
   const [collectors, setCollectors] = useState([]);
   const [search, setSearch] = useState("");
+  const [feedback, setFeedback] = useState({ message: "", type: "" });
 
   // 📄 PAGINATION
   const [page, setPage] = useState(0);
@@ -16,8 +18,7 @@ export default function Collectors() {
     name: "",
     email: "",
     phone: "",
-    zone: "",
-    password: "" // Temp Password
+    zone: ""
   });
 
   const [editData, setEditData] = useState(null);
@@ -26,6 +27,15 @@ export default function Collectors() {
   const [showHistory, setShowHistory] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    isDangerous: false,
+    confirmText: "Confirm"
+  });
 
   useEffect(() => {
     loadCollectors();
@@ -43,21 +53,43 @@ export default function Collectors() {
   const addCollector = async (e) => {
     e.preventDefault();
     try {
-      await API.post("/admin/collectors", newCollector);
-      setNewCollector({ name: "", email: "", phone: "", zone: "", password: "" });
+      const res = await API.post("/admin/collectors", newCollector);
+      setNewCollector({ name: "", email: "", phone: "", zone: "" });
       loadCollectors();
       setShowAddModal(false);
-      alert("Collector added successfully");
+
+      if (res.data.generatedPassword) {
+        setFeedback({ message: `Collector added! Password: ${res.data.generatedPassword}`, type: "success" });
+        // Longer timeout for them to copy it
+        setTimeout(() => setFeedback({ message: "", type: "" }), 10000);
+      } else {
+        setFeedback({ message: "Collector added successfully", type: "success" });
+        setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+      }
     } catch (error) {
       const message = error.response?.data?.message || "Failed to add collector";
-      alert(message);
+      setFeedback({ message: message, type: "error" });
     }
   };
 
   const deleteCollector = async (id) => {
-    if (!window.confirm("Delete collector permanently?")) return;
-    await API.delete(`/admin/collectors/${id}`);
-    loadCollectors();
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Collector?",
+      message: "This action cannot be undone. Checks related to this collector may become orphaned.",
+      confirmText: "Delete Permanently",
+      isDangerous: true,
+      onConfirm: async () => {
+        try {
+          await API.delete(`/admin/collectors/${id}`);
+          loadCollectors();
+          setFeedback({ message: "Collector deleted", type: "success" });
+          setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
+        } catch {
+          setFeedback({ message: "Failed to delete collector", type: "error" });
+        }
+      }
+    });
   };
 
   const toggleStatus = async (id, currentStatus) => {
@@ -71,9 +103,10 @@ export default function Collectors() {
       await API.put(`/admin/collectors/${editData._id}`, editData);
       setEditData(null);
       loadCollectors();
-      alert("Updated successfully");
+      setFeedback({ message: "Updated successfully", type: "success" });
+      setTimeout(() => setFeedback({ message: "", type: "" }), 3000);
     } catch (error) {
-      alert("Update failed");
+      setFeedback({ message: "Update failed", type: "error" });
     }
   };
 
@@ -108,6 +141,9 @@ export default function Collectors() {
           TOTAL AGENTS: {collectors.length}
         </div>
       </div>
+
+
+      {feedback.message && <div className={`alert ${feedback.type === 'success' ? 'alert-success' : 'alert-error'} shadow-lg mb-4 text-sm py-2 rounded-xl`}><span>{feedback.message}</span></div>}
 
       {/* SEARCH & ADD BAR */}
       <div className="glass p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between z-20 relative border border-white/5">
@@ -273,17 +309,7 @@ export default function Collectors() {
               />
             </div>
 
-            <div className="form-control w-full">
-              <label className="label"><span className="label-text text-gray-400">Temporary Password</span></label>
-              <input
-                required
-                type="text" // Visible so admin knows what they typed
-                value={newCollector.password}
-                onChange={e => setNewCollector({ ...newCollector, password: e.target.value })}
-                className="input input-bordered w-full bg-black/20 focus:bg-black/40 border-white/10 text-white focus:border-primary"
-                placeholder="Enter Temporary Password"
-              />
-            </div>
+
 
             <div className="grid grid-cols-2 gap-4">
               <div className="form-control w-full">
@@ -404,7 +430,16 @@ export default function Collectors() {
         </form>
       </dialog>
 
-    </div>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDangerous={confirmModal.isDangerous}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
+    </div >
   );
 }
 

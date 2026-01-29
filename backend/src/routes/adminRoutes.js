@@ -6,9 +6,16 @@ const dashboardController = require("../controllers/dashboardController");
 router.get("/dashboard/stats", dashboardController.dashboardStats);
 router.get("/sidebar/stats", dashboardController.getSidebarCounts);
 
+// AUTH & SUPER ADMIN MIDDLEWARE
+const authMiddleware = require("../middleware/authMiddleware");
+const superAdminMiddleware = require("../middleware/superAdminMiddleware");
+
 const adminController = require("../controllers/adminController");
-router.post("/create", adminController.createAdmin);
-router.get("/list", adminController.getAllAdmins);
+
+// Protect these routes
+router.post("/create", authMiddleware, superAdminMiddleware, adminController.createAdmin);
+router.get("/list", authMiddleware, superAdminMiddleware, adminController.getAllAdmins);
+router.delete("/delete/:id", authMiddleware, superAdminMiddleware, adminController.deleteAdmin);
 
 router.post("/check-email", adminController.checkAdminEmail);
 

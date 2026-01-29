@@ -3,7 +3,6 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import API from "../services/api";
 
 export default function Dashboard() {
-
   const [stats, setStats] = useState({
     households: 0,
     collectors: 0,
@@ -26,7 +25,8 @@ export default function Dashboard() {
       const res = await API.get("/admin/dashboard/stats");
       setStats(res.data.data);
     } catch {
-      alert("Failed to load dashboard stats");
+      // Silent or consistent error
+      console.error("Failed to load stats");
     }
   };
 

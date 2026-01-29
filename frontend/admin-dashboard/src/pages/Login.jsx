@@ -15,6 +15,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
+  const [error, setError] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   // Handle Magic Link Sign-in on Page Load
@@ -25,6 +29,7 @@ export default function Login() {
         emailForSignIn = window.prompt('Please provide your email for confirmation');
       }
 
+      setLoading(true);
       signInWithEmailLink(auth, emailForSignIn, window.location.href)
         .then(() => {
           window.localStorage.removeItem('emailForSignIn');
@@ -32,13 +37,16 @@ export default function Login() {
         })
         .catch((error) => {
           console.error("Error signing in with email link", error);
-          alert("Error verifying login link: " + error.message);
-        });
+          setError("Error verifying login link: " + error.message);
+        })
+        .finally(() => setLoading(false));
     }
   }, [navigate]);
 
   const login = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
@@ -49,16 +57,18 @@ export default function Login() {
       } catch (rbacError) {
         console.error("RBAC Failed:", rbacError);
         auth.signOut(); // Logout immediately
-        alert(rbacError.response?.data?.message || "Access Denied: Not an Admin");
+        setError(rbacError.response?.data?.message || "Access Denied: Not an Admin");
+        setLoading(false);
       }
     } catch (error) {
       console.error(error);
+      setLoading(false);
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        alert("Incorrect Email or Password");
+        setError("Incorrect Email or Password");
       } else if (error.code === 'auth/too-many-requests') {
-        alert("Too many failed attempts. Please try again later.");
+        setError("Too many failed attempts. Please try again later.");
       } else {
-        alert("Login failed: " + error.message);
+        setError("Login failed: " + error.message);
       }
     }
   };
@@ -66,7 +76,9 @@ export default function Login() {
   /* SEND MAGIC LINK HANDLER */
   const handleSendLink = async (e) => {
     e.preventDefault();
-    if (!resetEmail) return alert("Please enter your email");
+    setResetError("");
+    setResetSuccess("");
+    if (!resetEmail) return setResetError("Please enter your email");
 
     try {
       // 1. Verify existence in Backend first
@@ -80,16 +92,16 @@ export default function Login() {
 
       await sendSignInLinkToEmail(auth, resetEmail, actionCodeSettings);
       window.localStorage.setItem('emailForSignIn', resetEmail);
-      alert("Login link sent to " + resetEmail + ". Check your inbox!");
-      setIsResetOpen(false);
+      setResetSuccess("Login link sent to " + resetEmail + ". Check your inbox!");
+      // setIsResetOpen(false); // Keep open to show success message
       setResetEmail("");
 
     } catch (error) {
       console.error(error);
       if (error.response && error.response.status === 404) {
-        alert("Access Denied: This email is not a registered Admin account.");
+        setResetError("Access Denied: This email is not a registered Admin account.");
       } else {
-        alert("Failed to send link: " + (error.response?.data?.message || error.message));
+        setResetError("Failed to send link: " + (error.response?.data?.message || error.message));
       }
     }
   };
@@ -109,6 +121,15 @@ export default function Login() {
 
           <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 backdrop-blur-sm bg-opacity-90">
             <h2 className="text-2xl font-bold mb-6 text-gray-100">Admin Login</h2>
+
+            {error && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/50 text-red-200 text-sm flex items-center gap-2 animate-fade-in">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {error}
+              </div>
+            )}
 
             <form onSubmit={login} className="space-y-5">
               <div>
@@ -150,9 +171,11 @@ export default function Login() {
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg transform transition hover:scale-[1.02] active:scale-95 duration-200 mt-2"
+                disabled={loading}
+                className={`w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl shadow-lg transform transition duration-200 mt-2 flex items-center justify-center gap-2 ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:from-cyan-500 hover:to-blue-500 hover:scale-[1.02] active:scale-95'}`}
               >
-                Sign In
+                {loading && <span className="loading loading-spinner loading-sm"></span>}
+                {loading ? "Signing In..." : "Sign In"}
               </button>
             </form>
 
@@ -204,6 +227,24 @@ export default function Login() {
 
             <h3 className="text-2xl font-bold text-center text-white mb-2">Get Login Link</h3>
             <p className="text-gray-400 text-center mb-6 text-sm">Enter your email. We'll send you a direct Magic Link to login instantly.</p>
+
+            {resetSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-green-500/10 border border-green-500/50 text-green-200 text-sm flex items-center gap-2 animate-fade-in">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                {resetSuccess}
+              </div>
+            )}
+
+            {resetError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/50 text-red-200 text-sm flex items-center gap-2 animate-fade-in">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {resetError}
+              </div>
+            )}
 
             <form onSubmit={handleSendLink} className="space-y-4">
               <input

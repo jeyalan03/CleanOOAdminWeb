@@ -4,6 +4,7 @@ const upload = require("../middleware/upload");
 
 const {
   getRequests,
+  getPickupById,
   createRequest,
   approvePickup,
   rejectPickup,
@@ -23,6 +24,11 @@ router.get("/export", exportPickups);
 // GET ALL PICKUPS (ADMIN)
 // ===============================
 router.get("/", getRequests);
+
+// ===============================
+// GET SINGLE PICKUP (BY ID)
+// ===============================
+router.get("/:id", getPickupById);
 
 // ===============================
 // CREATE PICKUP (HOUSEHOLD - MOBILE)

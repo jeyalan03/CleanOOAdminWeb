@@ -13,6 +13,7 @@ import { auth } from "./firebase";
 import AssignCollector from "./pages/pickups/AssignCollector";
 import Settings from "./pages/Settings";
 import ManageAdmins from "./pages/ManageAdmins";
+import { ToastProvider } from "./contexts/ToastContext";
 
 import API from "./services/api";
 import { useEffect, useState } from "react";
@@ -25,11 +26,27 @@ export default function App() {
     notifications: 0
   });
   const [user, setUser] = useState(null);
+  const [adminRole, setAdminRole] = useState(null); // 'admin' or 'superadmin'
 
   useEffect(() => {
     // Auth Listener
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser && currentUser.email) {
+        // Fetch Role
+        try {
+          const token = await currentUser.getIdToken();
+          // Note: checkAdminEmail calls backend which checks DB and hardcoded email
+          const res = await API.post("/admin/check-email", { email: currentUser.email });
+          if (res.data.success) {
+            setAdminRole(res.data.role);
+          }
+        } catch (err) {
+          console.error("Error fetching role:", err);
+        }
+      } else {
+        setAdminRole(null);
+      }
     });
 
     // Initial fetch
@@ -57,127 +74,138 @@ export default function App() {
       console.error("Badge fetch error", e);
     }
   };
+
   return (
-    <Routes>
-      {/* LOGIN */}
-      <Route path="/login" element={<Login />} />
+    <ToastProvider>
+      <Routes>
+        {/* ... existing routes ... */}
+        {/* LOGIN */}
+        <Route path="/login" element={<Login />} />
 
-      {/* PROTECTED ADMIN AREA */}
-      <Route
-        path="/*"
-        element={
-          <AuthGuard>
-            <div className="flex h-screen overflow-hidden bg-transparent">
+        {/* PROTECTED ADMIN AREA */}
+        <Route
+          path="/*"
+          element={
+            <AuthGuard>
+              {/* ... existing layout ... */}
+              <div className="flex h-screen overflow-hidden bg-transparent">
 
-              {/* 🌟 GLASS SIDEBAR */}
-              <div className="hidden lg:flex flex-col w-72 glass-strong z-20 m-4 rounded-3xl overflow-hidden shadow-2xl">
-                {/* Sidebar Title */}
-                <div className="p-8 pb-4">
-                  <h1 className="text-3xl font-black tracking-tighter">
-                    <span className="text-white">Clean</span>
-                    <span className="text-gradient">OO</span>
-                  </h1>
-                  <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-semibold">Admin Workspace</p>
-                </div>
+                {/* 🌟 GLASS SIDEBAR */}
+                <div className="hidden lg:flex flex-col w-72 glass-strong z-20 m-4 rounded-3xl overflow-hidden shadow-2xl">
+                  {/* Sidebar Title */}
+                  <div className="p-8 pb-4">
+                    <h1 className="text-3xl font-black tracking-tighter">
+                      <span className="text-white">Clean</span>
+                      <span className="text-gradient">OO</span>
+                    </h1>
+                    <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-semibold">Admin Workspace</p>
+                  </div>
 
-                {/* Navigation */}
-                <div className="flex-1 overflow-y-auto py-4 px-4 space-y-2">
-                  <NavLink to="/">Dashboard</NavLink>
-                  <div className="h-px bg-white/5 my-2"></div>
-                  <NavLink to="/households">Households</NavLink>
-                  <NavLink to="/collectors">Collectors</NavLink>
-                  <NavLink to="/pickups" badge={counts.pickups}>Pickup Requests</NavLink>
-                  <NavLink to="/complaints" badge={counts.complaints}>Complaints</NavLink>
-                  <NavLink to="/rewards" badge={counts.rewards}>Rewards</NavLink>
-                  <div className="h-px bg-white/5 my-2"></div>
-                  <NavLink to="/notifications" badge={counts.notifications} badgeColor="warning">Notifications</NavLink>
-                  <NavLink to="/admins">Manage Admins</NavLink>
-                  <NavLink to="/settings">Settings</NavLink>
-                </div>
+                  {/* Navigation */}
+                  <div className="flex-1 overflow-y-auto py-4 px-4 space-y-2">
+                    <NavLink to="/">Dashboard</NavLink>
+                    <div className="h-px bg-white/5 my-2"></div>
+                    <NavLink to="/households">Households</NavLink>
+                    <NavLink to="/collectors">Collectors</NavLink>
+                    <NavLink to="/pickups" badge={counts.pickups}>Pickup Requests</NavLink>
+                    <NavLink to="/complaints" badge={counts.complaints}>Complaints</NavLink>
+                    <NavLink to="/rewards" badge={counts.rewards}>Rewards</NavLink>
+                    <div className="h-px bg-white/5 my-2"></div>
+                    <NavLink to="/notifications" badge={counts.notifications} badgeColor="warning">Notifications</NavLink>
+                    {adminRole === 'superadmin' && (
+                      <NavLink to="/admins">Manage Admins</NavLink>
+                    )}
+                    <NavLink to="/settings">Settings</NavLink>
+                  </div>
 
-                {/* User Profile Footer */}
-                <div className="p-4 bg-black/20">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="avatar online placeholder">
-                      <div className="bg-neutral text-neutral-content rounded-full w-10">
-                        {user?.photoURL ? (
-                          <img src={user.photoURL} alt={user.displayName} />
-                        ) : (
-                          <span className="text-sm">{user?.displayName ? user.displayName.charAt(0).toUpperCase() : "A"}</span>
-                        )}
+                  {/* User Profile Footer */}
+                  <div className="p-4 bg-black/20">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="avatar online placeholder">
+                        <div className="bg-neutral text-neutral-content rounded-full w-10">
+                          {user?.photoURL ? (
+                            <img src={user.photoURL} alt={user.displayName} />
+                          ) : (
+                            <span className="text-sm">{user?.displayName ? user.displayName.charAt(0).toUpperCase() : "A"}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="text-sm font-bold text-white truncate">{user?.displayName || "Admin User"}</p>
+                        <p className="text-xs text-success">Online</p>
                       </div>
                     </div>
-                    <div className="overflow-hidden">
-                      <p className="text-sm font-bold text-white truncate">{user?.displayName || "Admin User"}</p>
-                      <p className="text-xs text-success">Online</p>
+                    <button
+                      onClick={() => signOut(auth)}
+                      className="btn btn-error btn-outline btn-sm w-full glass hover:bg-error hover:text-white border-0 bg-white/5"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
+
+                {/* 🚀 MAIN CONTENT AREA (NOW WRAPPED IN DRAWER) */}
+                <div className="flex-1 drawer relative">
+                  <input id="my-drawer-2" type="checkbox" className="drawer-toggle" />
+
+                  <div className="drawer-content flex flex-col h-screen overflow-hidden">
+                    {/* BLUR NAVBAR */}
+                    <div className="w-full h-20 lg:hidden flex items-center justify-between px-8 z-10 sticky top-0">
+                      <div className="flex items-center gap-4">
+                        <label htmlFor="my-drawer-2" className="btn btn-square btn-ghost lg:hidden text-white">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-6 h-6 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* SCROLLABLE PAGE CONTENT */}
+                    <div className="flex-1 overflow-y-auto p-4 lg:p-8 pt-0 scroll-smooth">
+                      <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/households" element={<Households />} />
+                        <Route path="/collectors" element={<Collectors />} />
+                        <Route path="/pickups" element={<PickupRequests />} />
+                        <Route path="/complaints" element={<Complaints />} />
+                        <Route path="/pickups/assign/:id" element={<AssignCollector />} />
+                        <Route path="/rewards" element={<Rewards />} />
+                        <Route path="/notifications" element={<Notifications />} />
+                        {adminRole === 'superadmin' ? (
+                          <Route path="/admins" element={<ManageAdmins />} />
+                        ) : (
+                          // Redirect or show 403 content if tried to access directly
+                          <Route path="/admins" element={<div className="p-10 text-center text-error font-bold text-2xl">Access Denied</div>} />
+                        )}
+                        <Route path="/settings" element={<Settings />} />
+                      </Routes>
                     </div>
                   </div>
-                  <button
-                    onClick={() => signOut(auth)}
-                    className="btn btn-error btn-outline btn-sm w-full glass hover:bg-error hover:text-white border-0 bg-white/5"
-                  >
-                    Logout
-                  </button>
-                </div>
-              </div>
 
-              {/* MOBILE DRAWER */}
-              <div className="drawer lg:hidden absolute inset-0 z-50 pointer-events-none">
-                <input id="my-drawer-2" type="checkbox" className="drawer-toggle pointer-events-auto" />
-                <div className="drawer-side pointer-events-auto">
-                  <label htmlFor="my-drawer-2" className="drawer-overlay"></label>
-                  <ul className="menu p-4 w-72 min-h-full bg-base-100 text-base-content glass-strong h-full">
-                    {/* Mobile Menu Content */}
-                    <li className="mb-6"><span className="text-2xl font-black">Smart<span className="text-primary">Waste</span></span></li>
-                    <li><Link to="/">Dashboard</Link></li>
-                    <li><Link to="/households">Households</Link></li>
-                    <li><Link to="/collectors">Collectors</Link></li>
-                    <li><Link to="/pickups">Pickups</Link></li>
-                    <li><Link to="/complaints">Complaints</Link></li>
-                    <li><Link to="/rewards">Rewards</Link></li>
-                    <li><Link to="/admins">Manage Admins</Link></li>
-                    <li><Link to="/settings">Settings</Link></li>
-                    <li className="mt-auto"><button onClick={() => signOut(auth)}>Logout</button></li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* 🚀 MAIN CONTENT AREA */}
-              <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-
-                {/* BLUR NAVBAR */}
-                <div className="w-full h-20 lg:hidden flex items-center justify-between px-8 z-10 sticky top-0">
-                  <div className="flex items-center gap-4">
-                    <label htmlFor="my-drawer-2" className="btn btn-square btn-ghost lg:hidden text-white">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-6 h-6 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                    </label>
+                  {/* MOBILE DRAWER SIDEBAR */}
+                  <div className="drawer-side z-50 lg:hidden">
+                    <label htmlFor="my-drawer-2" className="drawer-overlay"></label>
+                    <ul className="menu p-4 w-72 min-h-full bg-[#15151a] text-base-content border-r border-[#363642]">
+                      <li className="mb-6"><span className="text-2xl font-black text-white">Smart<span className="text-primary">Waste</span></span></li>
+                      <li><Link to="/" className="text-gray-300 hover:text-white">Dashboard</Link></li>
+                      <li><Link to="/households" className="text-gray-300 hover:text-white">Households</Link></li>
+                      <li><Link to="/collectors" className="text-gray-300 hover:text-white">Collectors</Link></li>
+                      <li><Link to="/pickups" className="text-gray-300 hover:text-white">Pickups</Link></li>
+                      <li><Link to="/complaints" className="text-gray-300 hover:text-white">Complaints</Link></li>
+                      <li><Link to="/rewards" className="text-gray-300 hover:text-white">Rewards</Link></li>
+                      {adminRole === 'superadmin' && (
+                        <li><Link to="/admins" className="text-gray-300 hover:text-white">Manage Admins</Link></li>
+                      )}
+                      <li><Link to="/settings" className="text-gray-300 hover:text-white">Settings</Link></li>
+                      <li className="mt-auto"><button onClick={() => signOut(auth)} className="text-error hover:bg-error/10">Logout</button></li>
+                    </ul>
                   </div>
-
                 </div>
 
-                {/* SCROLLABLE PAGE CONTENT */}
-                <div className="flex-1 overflow-y-auto p-4 lg:p-8 pt-0 scroll-smooth">
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/households" element={<Households />} />
-                    <Route path="/collectors" element={<Collectors />} />
-                    <Route path="/pickups" element={<PickupRequests />} />
-                    <Route path="/complaints" element={<Complaints />} />
-                    <Route path="/pickups/assign/:id" element={<AssignCollector />} />
-                    <Route path="/rewards" element={<Rewards />} />
-                    <Route path="/notifications" element={<Notifications />} />
-                    <Route path="/admins" element={<ManageAdmins />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
-                </div>
               </div>
-
-            </div>
-          </AuthGuard>
-        }
-      />
-
-    </Routes>
+            </AuthGuard>
+          }
+        />
+      </Routes>
+    </ToastProvider>
   );
 }
 

@@ -41,6 +41,26 @@ exports.getRequests = async (req, res) => {
 };
 
 /* ======================================================
+   GET SINGLE PICKUP (BY ID)
+====================================================== */
+exports.getPickupById = async (req, res) => {
+  try {
+    const pickup = await Pickup.findById(req.params.id)
+      .populate("household", "name phone address zone")
+      .populate("assignedCollector", "name phone zone");
+
+    if (!pickup) {
+      return res.status(404).json({ success: false, message: "Pickup not found" });
+    }
+
+    res.json({ success: true, data: pickup });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Load failed" });
+  }
+};
+
+/* ======================================================
    CREATE PICKUP (HOUSEHOLD)
 ====================================================== */
 exports.createRequest = async (req, res) => {

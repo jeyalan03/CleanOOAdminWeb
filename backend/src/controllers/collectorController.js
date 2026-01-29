@@ -21,16 +21,23 @@ const getCollectors = async (req, res) => {
 // ADD COLLECTOR
 const addCollector = async (req, res) => {
   try {
-    const { name, email, phone, zone, password } = req.body;
+    let { name, email, phone, zone, password } = req.body;
     console.log("--> ADD COLLECTOR REQUEST:", email);
 
-    if (!name || !email || !phone || !password) {
-      return res.status(400).json({ success: false, message: "All fields including password are required" });
+    if (!name || !email || !phone) {
+      return res.status(400).json({ success: false, message: "Name, email, and phone are required" });
     }
 
     const exists = await Collector.findOne({ email });
     if (exists) {
       return res.status(409).json({ success: false, message: "Collector already exists" });
+    }
+
+    // Auto-generate password if not provided
+    let generatedPassword = null;
+    if (!password) {
+      generatedPassword = Math.random().toString(36).slice(-8); // Random 8 char string
+      password = generatedPassword;
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -67,7 +74,8 @@ const addCollector = async (req, res) => {
     res.json({
       success: true,
       message: "Collector added successfully",
-      data: newCollector
+      data: newCollector,
+      generatedPassword: generatedPassword || null // Return password if generated
     });
 
   } catch (error) {
