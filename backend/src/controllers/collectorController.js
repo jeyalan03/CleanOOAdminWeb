@@ -1,6 +1,5 @@
 const Collector = require("../models/Collector");
 const PickupRequest = require("../models/PickupRequest");
-const bcrypt = require("bcryptjs");
 const admin = require("../config/firebase"); // Import Firebase Admin
 
 // GET ALL COLLECTORS
@@ -40,8 +39,6 @@ const addCollector = async (req, res) => {
       password = generatedPassword;
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     // 1. Create User in Firebase Auth
     let firebaseUser;
     try {
@@ -61,13 +58,13 @@ const addCollector = async (req, res) => {
     }
 
     // 2. Create Collector in MongoDB
+    // Explicitly select fields to prevent accidentally saving password if it exists in req.body
     const newCollector = await Collector.create({
       name,
       email,
       phone,
       zone,
-      password: hashedPassword,
-      uid: firebaseUser.uid, // Link UID
+      uid: firebaseUser.uid,
       status: "active"
     });
 
